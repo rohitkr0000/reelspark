@@ -1,0 +1,13 @@
+{
+  "name": "reelspark",
+  "private": true,
+  "workspaces": [
+    "apps/admin",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=admin",
+    "admin": "npm run dev --workspace=admin",
+    "mobile": "npm --prefix apps/mobile run dev"
+  }
+}
