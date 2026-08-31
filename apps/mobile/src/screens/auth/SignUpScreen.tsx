@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../../components/Button';
 import { TextField } from '../../components/TextField';
 import { supabase } from '../../lib/supabase';
+import { clearStoredReferral, getStoredReferral } from '../../lib/referral';
 import { colors, spacing, type } from '../../theme/tokens';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -14,6 +15,7 @@ export function SignUpScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [referralCode, setReferralCode] = useState(() => getStoredReferral());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,12 +26,18 @@ export function SignUpScreen({ navigation }: Props) {
       return;
     }
     setLoading(true);
-    const { error: signUpError } = await supabase.auth.signUp({ email, password });
+    const trimmedCode = referralCode.trim().toUpperCase();
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: trimmedCode ? { data: { referral_code: trimmedCode } } : undefined,
+    });
     setLoading(false);
     if (signUpError) {
       setError(signUpError.message);
       return;
     }
+    clearStoredReferral();
     navigation.navigate('CompleteProfile');
   }
 
@@ -51,6 +59,15 @@ export function SignUpScreen({ navigation }: Props) {
           <Text style={styles.label}>Confirm password</Text>
           <TextField value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="••••••••" />
 
+          <Text style={styles.label}>Referral code (optional)</Text>
+          <TextField
+            value={referralCode}
+            onChangeText={setReferralCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            placeholder="Friend's code"
+          />
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Button label="Create account" onPress={handleSignUp} loading={loading} style={{ marginTop: spacing.md }} />
@@ -63,7 +80,15 @@ export function SignUpScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, padding: spacing.xl, justifyContent: 'space-between' },
+  screen: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    backgroundColor: colors.background,
+    padding: spacing.xl,
+    justifyContent: 'space-between',
+  },
   header: { marginTop: spacing.xl, gap: spacing.xs },
   title: { ...type.h1, color: colors.text },
   subtitle: { ...type.bodySmall, color: colors.textMuted },

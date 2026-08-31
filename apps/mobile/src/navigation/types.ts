@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 export type AuthStackParamList = {
   Welcome: undefined;
   SignUp: undefined;
@@ -11,4 +13,14 @@ export type MainTabParamList = {
   Submit: undefined;
   MyVideos: undefined;
   Profile: undefined;
+};
+
+export type MainStackParamList = {
+  Tabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  Payment: undefined;
+};
+
+export type ProfileStackParamList = {
+  ProfileHome: undefined;
+  EditProfile: undefined;
 };

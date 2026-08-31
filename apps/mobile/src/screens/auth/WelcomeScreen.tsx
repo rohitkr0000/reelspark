@@ -41,7 +41,15 @@ export function WelcomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, justifyContent: 'flex-end', padding: spacing.xl },
+  screen: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
+    backgroundColor: colors.background,
+    justifyContent: 'flex-end',
+    padding: spacing.xl,
+  },
   glow: { position: 'absolute', top: '10%', left: '20%', width: 280, height: 280, borderRadius: 140 },
   top: { flex: 1, justifyContent: 'center', gap: spacing.md },
   wordmarkRow: { flexDirection: 'row', marginTop: spacing.sm },

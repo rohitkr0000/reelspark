@@ -1,14 +1,24 @@
-import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Image, StyleSheet, Text, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fonts, gradient } from '../theme/tokens';
 
 interface AvatarProps {
   initials: string;
+  imageUri?: string | null;
   size?: number;
   style?: ViewStyle;
 }
 
-export function Avatar({ initials, size = 34, style }: AvatarProps) {
+export function Avatar({ initials, imageUri, size = 34, style }: AvatarProps) {
+  if (imageUri) {
+    return (
+      <Image
+        source={{ uri: imageUri }}
+        style={[styles.base, { width: size, height: size, borderRadius: size / 2 }, style] as any}
+      />
+    );
+  }
+
   return (
     <LinearGradient
       colors={gradient.brand}

@@ -52,7 +52,15 @@ export function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background, padding: spacing.xl, justifyContent: 'space-between' },
+  screen: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    backgroundColor: colors.background,
+    padding: spacing.xl,
+    justifyContent: 'space-between',
+  },
   header: { marginTop: spacing.xl, gap: spacing.xs },
   title: { ...type.h1, color: colors.text },
   subtitle: { ...type.bodySmall, color: colors.textMuted },
