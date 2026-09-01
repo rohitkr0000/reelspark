@@ -24,16 +24,16 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 justify-center mb-8">
-          <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+          <svg width="30" height="30" viewBox="0 0 40 40" fill="none">
             <defs>
-              <linearGradient id="logoGrad" x1="2" y1="2" x2="38" y2="38" gradientUnits="userSpaceOnUse">
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
                 <stop offset="0" stopColor="#FF651C" />
                 <stop offset="0.5" stopColor="#FD3667" />
                 <stop offset="1" stopColor="#7D27E3" />
               </linearGradient>
             </defs>
-            <rect x="2" y="2" width="36" height="36" rx="11" stroke="url(#logoGrad)" strokeWidth="2.6" />
-            <path d="M16.5 14.5L26 20L16.5 25.5V14.5Z" fill="url(#logoGrad)" />
+            <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#logoGrad)" />
+            <path d="M16 12.8L28 20L16 27.2V12.8Z" fill="#fff" />
           </svg>
           <span className="font-display font-semibold text-lg">
             Reel<span className="brand-gradient-text">Spark</span> Admin
