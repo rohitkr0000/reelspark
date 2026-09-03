@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Videos } from './pages/Videos';
 import { Users } from './pages/Users';
 import { Payments } from './pages/Payments';
+import { Referrals } from './pages/Referrals';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 
@@ -21,6 +22,7 @@ function ProtectedRoutes() {
         <Route path="videos" element={<Videos />} />
         <Route path="users" element={<Users />} />
         <Route path="payments" element={<Payments />} />
+        <Route path="referrals" element={<Referrals />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
       </Route>

@@ -1,45 +1,30 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import QRCode from 'react-qr-code';
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../components/Button';
-import { TextField } from '../components/TextField';
 import { useAuth } from '../lib/AuthProvider';
 import { useAppSettings } from '../hooks/useAppSettings';
 import {
+  useCreateRazorpayOrder,
   useRegistrationPayment,
-  useSubmitRegistrationPayment,
-  useUploadPaymentProof,
+  useVerifyRazorpayPayment,
 } from '../hooks/useRegistrationPayment';
+import { openRazorpayCheckout } from '../lib/razorpay';
 import { colors, fonts, radius, spacing, type } from '../theme/tokens';
 import type { MainStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<MainStackParamList, 'Payment'>;
 
-function upiUri(pa: string, pn: string, amount: number) {
-  const params = new URLSearchParams({
-    pa,
-    pn,
-    am: String(amount),
-    cu: 'INR',
-    tn: 'ReelSpark registration',
-  });
-  return `upi://pay?${params.toString()}`;
-}
-
 export function PaymentScreen({ navigation }: Props) {
   const { profile, refreshProfile } = useAuth();
   const { settings } = useAppSettings();
   const { data: payment, isLoading } = useRegistrationPayment();
-  const uploadProof = useUploadPaymentProof();
-  const submitPayment = useSubmitRegistrationPayment();
+  const createOrder = useCreateRazorpayOrder();
+  const verifyPayment = useVerifyRazorpayPayment();
 
-  const [reference, setReference] = useState('');
-  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fee = settings.registration_fee_inr;
@@ -50,34 +35,24 @@ export function PaymentScreen({ navigation }: Props) {
     if (payment?.status === 'approved' && status !== 'approved') refreshProfile();
   }, [payment?.status, status, refreshProfile]);
 
-  async function copyUpiId() {
-    try {
-      await navigator.clipboard.writeText(settings.upi_id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
-
-  async function pickScreenshot() {
+  async function handlePay() {
     setError(null);
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (result.canceled) return;
+    setBusy(true);
     try {
-      const path = await uploadProof.mutateAsync(result.assets[0].uri);
-      setScreenshotPath(path);
+      const order = await createOrder.mutateAsync();
+      const result = await openRazorpayCheckout({
+        keyId: order.keyId,
+        orderId: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+        prefill: order.prefill,
+      });
+      await verifyPayment.mutateAsync(result);
     } catch (e) {
-      setError((e as Error)?.message ?? 'Could not upload the screenshot.');
+      setError((e as Error)?.message ?? 'Payment could not be completed.');
+    } finally {
+      setBusy(false);
     }
-  }
-
-  function handleSubmit() {
-    setError(null);
-    submitPayment.mutate(
-      { upiReference: reference.trim(), screenshotPath },
-      { onError: (e) => setError((e as Error)?.message ?? 'Could not submit. Try again.') },
-    );
   }
 
   // ---- approved -------------------------------------------------------
@@ -96,7 +71,7 @@ export function PaymentScreen({ navigation }: Props) {
     );
   }
 
-  // ---- submitted / pending -----------------------------------------
+  // ---- submitted / pending (manual admin review only) ----------------
   if (!isLoading && payment?.status === 'submitted') {
     return (
       <SafeAreaView style={styles.screen}>
@@ -106,21 +81,17 @@ export function PaymentScreen({ navigation }: Props) {
           </View>
           <Text style={styles.cardTitle}>Waiting for approval</Text>
           <Text style={styles.cardBody}>
-            We got your payment details. An admin will verify the ₹{payment.amount_inr} transfer and unlock posting —
-            this page updates automatically.
+            We're confirming your ₹{payment.amount_inr} payment. This page updates automatically once it's done.
           </Text>
-          {payment.upi_reference ? (
-            <Text style={styles.metaLine}>Reference: {payment.upi_reference}</Text>
-          ) : null}
           <Button label="Back" variant="secondary" onPress={() => navigation.goBack()} style={{ marginTop: spacing.lg }} />
         </View>
       </SafeAreaView>
     );
   }
 
-  // ---- unpaid / rejected — show the pay form -----------------------
+  // ---- unpaid / rejected — show the pay screen -----------------------
   const rejected = payment?.status === 'rejected';
-  const canSubmit = reference.trim().length >= 6 && !!screenshotPath && !submitPayment.isPending;
+  const referred = !!profile?.referred_by;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -128,65 +99,46 @@ export function PaymentScreen({ navigation }: Props) {
         <View style={styles.header}>
           <Text style={styles.title}>Complete registration</Text>
           <Text style={styles.subtitle}>
-            A one-time ₹{fee} fee unlocks video posting. Pay to the UPI ID below, then submit your transaction
-            reference for approval.
+            A one-time ₹{fee} fee unlocks video posting. Pay securely with Razorpay — UPI, cards, net banking and
+            wallets are all supported. Posting unlocks the moment your payment is confirmed.
           </Text>
         </View>
 
-        {rejected && payment ? (
-          <View style={styles.rejectedBox}>
-            <Text style={styles.rejectedTitle}>Previous submission was rejected</Text>
-            {payment.admin_note ? <Text style={styles.rejectedNote}>“{payment.admin_note}”</Text> : null}
-            <Text style={styles.rejectedNote}>Double-check the reference number and screenshot, then resubmit.</Text>
+        {referred ? (
+          <View style={styles.referralBox}>
+            <Text style={styles.referralBoxTitle}>
+              🎉 Congrats! You’ve got ₹{settings.referral_bonus_inr} on your referral
+            </Text>
+            <Text style={styles.referralBoxNote}>
+              You joined with a friend’s code. Complete your ₹{fee} registration below to lock it in.
+            </Text>
           </View>
         ) : null}
 
-        <View style={styles.qrCard}>
-          <View style={styles.qrWrap}>
-            <QRCode value={upiUri(settings.upi_id, settings.upi_payee_name, fee)} size={188} />
+        {rejected && payment ? (
+          <View style={styles.rejectedBox}>
+            <Text style={styles.rejectedTitle}>Previous payment was rejected</Text>
+            {payment.admin_note ? <Text style={styles.rejectedNote}>“{payment.admin_note}”</Text> : null}
+            <Text style={styles.rejectedNote}>You can retry the payment below.</Text>
           </View>
+        ) : null}
+
+        <View style={styles.payCard}>
+          <Text style={styles.payLabel}>Registration fee</Text>
           <Text style={styles.amount}>₹{fee}</Text>
-          <Pressable style={styles.upiRow} onPress={copyUpiId}>
-            <Text style={styles.upiId}>{settings.upi_id}</Text>
-            <Feather name={copied ? 'check-circle' : 'grid'} size={14} color={copied ? colors.purple : colors.textMuted} />
-            <Text style={styles.copyHint}>{copied ? 'Copied' : 'Tap to copy'}</Text>
-          </Pressable>
-          <Text style={styles.scanHint}>Scan with any UPI app, or pay the ID directly.</Text>
+          <View style={styles.methodRow}>
+            <Feather name="lock" size={13} color={colors.textMuted} />
+            <Text style={styles.methodHint}>Secured by Razorpay</Text>
+          </View>
         </View>
-
-        <Text style={styles.fieldLabel}>UPI transaction / UTR reference</Text>
-        <TextField
-          value={reference}
-          onChangeText={setReference}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          placeholder="e.g. 4198 7654 3210"
-        />
-
-        <Text style={styles.fieldLabel}>Payment screenshot</Text>
-        <Pressable style={styles.uploadBox} onPress={pickScreenshot}>
-          {uploadProof.isPending ? (
-            <ActivityIndicator color={colors.pink} />
-          ) : screenshotPath ? (
-            <>
-              <Feather name="check-circle" size={16} color={colors.purple} />
-              <Text style={styles.uploadText}>Screenshot attached — tap to replace</Text>
-            </>
-          ) : (
-            <>
-              <Feather name="camera" size={16} color={colors.textMuted} />
-              <Text style={styles.uploadText}>Upload a screenshot of the payment</Text>
-            </>
-          )}
-        </Pressable>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button
-          label={submitPayment.isPending ? 'Submitting…' : 'Submit for approval'}
-          onPress={handleSubmit}
-          disabled={!canSubmit}
-          loading={submitPayment.isPending}
+          label={busy ? 'Processing…' : `Pay ₹${fee} with Razorpay`}
+          onPress={handlePay}
+          disabled={busy}
+          loading={busy}
           style={{ marginTop: spacing.lg }}
         />
         <Button label="Cancel" variant="ghost" onPress={() => navigation.goBack()} />
@@ -206,45 +158,25 @@ const styles = StyleSheet.create({
   iconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
   cardTitle: { ...type.h3, color: colors.text, textAlign: 'center' },
   cardBody: { ...type.bodySmall, color: colors.textMuted, textAlign: 'center', maxWidth: 320 },
-  metaLine: { fontFamily: fonts.mono, fontSize: 12, color: colors.textMuted, marginTop: spacing.xs },
 
-  qrCard: {
+  payCard: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.xl,
     padding: spacing.xl,
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: spacing.xs,
   },
-  qrWrap: { backgroundColor: '#fff', padding: 12, borderRadius: radius.md },
-  amount: { fontFamily: fonts.monoSemibold, fontSize: 22, color: colors.text, marginTop: spacing.sm },
-  upiRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  upiId: { fontFamily: fonts.mono, fontSize: 13, color: colors.text },
-  copyHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  scanHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, textAlign: 'center' },
-
-  fieldLabel: {
+  payLabel: {
     ...type.label,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
   },
-  uploadBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-  },
-  uploadText: { fontFamily: fonts.body, fontSize: 12.5, color: colors.textMuted },
+  amount: { fontFamily: fonts.monoSemibold, fontSize: 32, color: colors.text, marginVertical: spacing.xs },
+  methodRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  methodHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+
   error: { ...type.bodySmall, color: colors.coral, marginTop: spacing.sm },
 
   rejectedBox: {
@@ -258,4 +190,16 @@ const styles = StyleSheet.create({
   },
   rejectedTitle: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.coral },
   rejectedNote: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
+
+  referralBox: {
+    backgroundColor: 'rgba(125,39,227,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(125,39,227,0.4)',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: 4,
+  },
+  referralBoxTitle: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.text },
+  referralBoxNote: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
 });

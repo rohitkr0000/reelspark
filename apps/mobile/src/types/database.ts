@@ -44,12 +44,38 @@ export interface RegistrationPayment {
   id: string;
   user_id: string;
   amount_inr: number;
-  upi_reference: string | null;
-  screenshot_path: string | null;
-  status: 'submitted' | 'approved' | 'rejected';
+  razorpay_order_id: string | null;
+  razorpay_payment_id: string | null;
+  razorpay_signature: string | null;
+  status: 'created' | 'submitted' | 'approved' | 'rejected';
   reviewed_by: string | null;
   reviewed_at: string | null;
   admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferralEarning {
+  id: string;
+  referrer_id: string;
+  referred_user_id: string;
+  payment_id: string;
+  amount_inr: number;
+  created_at: string;
+}
+
+export type ReferralWithdrawalStatus = 'paid' | 'failed' | 'reversed';
+
+export interface ReferralWithdrawal {
+  id: string;
+  user_id: string;
+  amount_inr: number;
+  upi_id: string;
+  status: ReferralWithdrawalStatus;
+  reference: string | null;
+  admin_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,7 +84,7 @@ export interface AppSettings {
   id: boolean;
   registration_fee_inr: number;
   referral_bonus_inr: number;
-  upi_id: string;
-  upi_payee_name: string;
+  min_referral_withdrawal_inr: number;
+  razorpay_key_id: string;
   updated_at: string;
 }

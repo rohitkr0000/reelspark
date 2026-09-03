@@ -9,6 +9,7 @@ const NAV = [
   { to: '/videos', label: 'Videos' },
   { to: '/users', label: 'Users' },
   { to: '/payments', label: 'Payments' },
+  { to: '/referrals', label: 'Referrals' },
   { to: '/reports', label: 'Reports' },
   { to: '/settings', label: 'Settings' },
 ];
@@ -16,18 +17,18 @@ const NAV = [
 function Mark() {
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <svg width="26" height="26" viewBox="0 0 40 40" fill="none" aria-label="ReelSpark">
+      <svg width="20" height="20" viewBox="0 0 40 40" fill="none">
         <defs>
-          <linearGradient id="tbLogo" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+          <linearGradient id="tbLogo" x1="2" y1="2" x2="38" y2="38" gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#FF651C" />
             <stop offset="0.5" stopColor="#FD3667" />
             <stop offset="1" stopColor="#7D27E3" />
           </linearGradient>
         </defs>
-        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#tbLogo)" />
-        <path d="M16 12.8L28 20L16 27.2V12.8Z" fill="#fff" />
+        <rect x="2" y="2" width="36" height="36" rx="11" stroke="url(#tbLogo)" strokeWidth="3" />
+        <path d="M16.5 14.5L26 20L16.5 25.5V14.5Z" fill="url(#tbLogo)" />
       </svg>
-      <span className="font-display font-semibold text-sm tracking-tight">
+      <span className="font-display font-semibold text-[13px] tracking-tight">
         Reel<span className="brand-gradient-text">Spark</span>
       </span>
     </div>
@@ -39,12 +40,11 @@ function useVitals() {
     queryKey: ['vitals'],
     refetchInterval: 60000,
     queryFn: async () => {
-      const [pending, pay, reports] = await Promise.all([
+      const [pending, reports] = await Promise.all([
         supabase.from('videos').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('is_deleted', false),
-        supabase.from('registration_payments').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
         supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'open'),
       ]);
-      return { pending: pending.count ?? 0, pay: pay.count ?? 0, reports: reports.count ?? 0 };
+      return { pending: pending.count ?? 0, reports: reports.count ?? 0 };
     },
   });
 }
@@ -53,7 +53,6 @@ function Vitals({ className = '' }: { className?: string }) {
   const { data } = useVitals();
   const items = [
     ['pending', data?.pending ?? 0, 'text-pink'],
-    ['unpaid', data?.pay ?? 0, 'text-magenta'],
     ['reports', data?.reports ?? 0, 'text-orange'],
   ] as const;
   return (

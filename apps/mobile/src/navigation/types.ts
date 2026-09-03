@@ -23,4 +23,8 @@ export type MainStackParamList = {
 export type ProfileStackParamList = {
   ProfileHome: undefined;
   EditProfile: undefined;
+  ReferralWallet: undefined;
+  AccountSettings: undefined;
+  Notifications: undefined;
+  HelpSupport: undefined;
 };

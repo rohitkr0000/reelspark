@@ -17,7 +17,11 @@ import type { MainStackParamList, ProfileStackParamList } from '../navigation/ty
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileHome'>;
 
-const SETTINGS_ITEMS = ['Account settings', 'Notifications', 'Help & support'];
+const SETTINGS_ITEMS: { label: string; screen: keyof ProfileStackParamList }[] = [
+  { label: 'Account settings', screen: 'AccountSettings' },
+  { label: 'Notifications', screen: 'Notifications' },
+  { label: 'Help & support', screen: 'HelpSupport' },
+];
 
 const PAYMENT_PILL: Record<string, { label: string; color: string }> = {
   approved: { label: 'Registered', color: colors.purple },
@@ -28,6 +32,7 @@ const PAYMENT_PILL: Record<string, { label: string; color: string }> = {
 
 function ReferralCard() {
   const navigation = useNavigation<NativeStackNavigationProp<MainStackParamList>>();
+  const profileNav = useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
   const { profile } = useAuth();
   const { settings } = useAppSettings();
   const [copied, setCopied] = useState(false);
@@ -102,6 +107,12 @@ function ReferralCard() {
           <Text style={styles.referralStatLbl}>Friends joined</Text>
         </View>
       </View>
+
+      <Pressable style={styles.walletRow} onPress={() => profileNav.navigate('ReferralWallet')}>
+        <Feather name="credit-card" size={14} color={colors.pink} />
+        <Text style={styles.walletLink}>Withdraw &amp; transactions</Text>
+        <Feather name="chevron-right" size={16} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 }
@@ -112,6 +123,11 @@ export function ProfileScreen({ navigation }: Props) {
 
   const totalViews = (videos ?? []).reduce((sum, v) => sum + v.view_count_in_app, 0);
   const initials = (profile?.display_name || '??').slice(0, 2).toUpperCase();
+
+  function handleLogout() {
+    const confirmed = typeof window === 'undefined' || window.confirm('Log out of ReelSpark?');
+    if (confirmed) supabase.auth.signOut();
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -163,12 +179,16 @@ export function ProfileScreen({ navigation }: Props) {
 
         <View style={styles.settingsList}>
           {SETTINGS_ITEMS.map((item) => (
-            <Pressable key={item} style={styles.settingsItem}>
-              <Text style={styles.settingsLabel}>{item}</Text>
+            <Pressable
+              key={item.screen}
+              style={styles.settingsItem}
+              onPress={() => navigation.navigate(item.screen)}
+            >
+              <Text style={styles.settingsLabel}>{item.label}</Text>
               <Feather name="chevron-right" size={18} color="#4A4A52" />
             </Pressable>
           ))}
-          <Pressable style={styles.settingsItem} onPress={() => supabase.auth.signOut()}>
+          <Pressable style={styles.settingsItem} onPress={handleLogout}>
             <Text style={[styles.settingsLabel, styles.danger]}>Log out</Text>
             <Feather name="chevron-right" size={18} color={colors.coral} />
           </Pressable>
@@ -240,6 +260,16 @@ const styles = StyleSheet.create({
   referralStatsRow: { flexDirection: 'row', gap: spacing['2xl'], marginTop: spacing.sm },
   referralStatNum: { fontFamily: fonts.monoSemibold, fontSize: 18, color: colors.text },
   referralStatLbl: { fontFamily: fonts.body, fontSize: 10.5, color: colors.textMuted, marginTop: 2 },
+  walletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  walletLink: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.pink },
   statTiles: { flexDirection: 'row', gap: spacing.sm },
   statTile: {
     flex: 1,

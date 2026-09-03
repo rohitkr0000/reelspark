@@ -9,10 +9,9 @@ function one<T>(x: T | T[] | null | undefined): T | undefined {
 }
 
 async function fetchStats() {
-  const [users, paid, payPending, balances, pending, approved, flagged, openReports] = await Promise.all([
+  const [users, paid, balances, pending, approved, flagged, openReports] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('payment_status', 'approved'),
-    supabase.from('registration_payments').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
     supabase.from('profiles').select('referral_balance_inr').gt('referral_balance_inr', 0),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('status', 'pending').eq('is_deleted', false),
     supabase.from('videos').select('*', { count: 'exact', head: true }).eq('status', 'approved').eq('is_deleted', false),
@@ -23,7 +22,6 @@ async function fetchStats() {
   return {
     users: users.count ?? 0,
     paid: paid.count ?? 0,
-    payPending: payPending.count ?? 0,
     referralOwed: (balances.data ?? []).reduce((s, r) => s + (r.referral_balance_inr ?? 0), 0),
     pending: pending.count ?? 0,
     approved: approved.count ?? 0,
@@ -34,7 +32,7 @@ async function fetchStats() {
 
 type QueueItem = {
   id: string;
-  kind: 'video' | 'payment' | 'report';
+  kind: 'video' | 'report';
   to: string;
   title: string;
   sub: string;
@@ -42,18 +40,12 @@ type QueueItem = {
 };
 
 async function fetchQueue(): Promise<QueueItem[]> {
-  const [videos, payments, reports] = await Promise.all([
+  const [videos, reports] = await Promise.all([
     supabase
       .from('videos')
       .select('id, title, author_name, status, created_at')
       .in('status', ['pending', 'flagged'])
       .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(20),
-    supabase
-      .from('registration_payments')
-      .select('id, amount_inr, upi_reference, created_at, user:profiles!registration_payments_user_id_fkey(display_name, email)')
-      .eq('status', 'submitted')
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
@@ -73,17 +65,6 @@ async function fetchQueue(): Promise<QueueItem[]> {
       title: v.title ?? 'Untitled submission',
       sub: `${v.status} · ${v.author_name ?? 'Unknown'}`,
       at: v.created_at,
-    });
-  }
-  for (const p of (payments.data ?? []) as any[]) {
-    const u = one<{ display_name?: string; email?: string }>(p.user);
-    items.push({
-      id: p.id,
-      kind: 'payment',
-      to: `/payments?id=${p.id}`,
-      title: `₹${p.amount_inr} — ${u?.display_name ?? u?.email ?? 'user'}`,
-      sub: p.upi_reference ? `ref ${p.upi_reference}` : 'no reference given',
-      at: p.created_at,
     });
   }
   for (const r of (reports.data ?? []) as any[]) {
@@ -110,7 +91,6 @@ function Stat({ label, value, accent }: { label: string; value: number | string;
 
 const KIND_TAG: Record<QueueItem['kind'], string> = {
   video: 'text-pink border-magenta/40',
-  payment: 'text-purple-300 border-purple/40',
   report: 'text-orange-300 border-orange/40',
 };
 
@@ -126,7 +106,6 @@ export function Dashboard() {
       <div className="flex flex-wrap divide-x divide-border border-b border-border">
         <Stat label="Total users" value={stats?.users ?? 0} />
         <Stat label="Paid users" value={stats?.paid ?? 0} accent="text-purple" />
-        <Stat label="Payments pending" value={stats?.payPending ?? 0} accent="text-magenta" />
         <Stat label="Referral owed" value={`₹${stats?.referralOwed ?? 0}`} accent="text-orange" />
         <Stat label="Pending review" value={stats?.pending ?? 0} accent="text-pink" />
         <Stat label="Approved" value={stats?.approved ?? 0} />

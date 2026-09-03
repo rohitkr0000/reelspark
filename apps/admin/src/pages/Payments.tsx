@@ -1,48 +1,29 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Badge, Btn, DetailEmpty, Field, ListRow, ListState, WorkPage } from '../components/ui';
-import type { RegistrationPayment, RegistrationPaymentStatus } from '../types/database';
-
-const FILTERS: { label: string; value: RegistrationPaymentStatus | 'all' }[] = [
-  { label: 'Submitted', value: 'submitted' },
-  { label: 'Approved', value: 'approved' },
-  { label: 'Rejected', value: 'rejected' },
-  { label: 'All', value: 'all' },
-];
-
-async function openScreenshot(path: string | null) {
-  if (!path) return;
-  const { data, error } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 120);
-  if (error || !data) return window.alert('Could not open the screenshot.');
-  window.open(data.signedUrl, '_blank', 'noreferrer');
-}
+import { Badge, DetailEmpty, Field, ListRow, ListState, WorkPage } from '../components/ui';
+import type { RegistrationPayment } from '../types/database';
 
 export function Payments() {
-  const [filter, setFilter] = useState<RegistrationPaymentStatus | 'all'>('submitted');
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('id'));
-  const queryClient = useQueryClient();
 
+  // Inspect-only: a row appears here the moment Razorpay's signature is verified
+  // and `confirm_razorpay_payment` flips it to `approved`. Started-but-unpaid,
+  // failed and rejected attempts never surface — there's nothing to act on.
   const { data: payments, isLoading } = useQuery({
-    queryKey: ['adminPayments', filter],
+    queryKey: ['adminPayments'],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('registration_payments')
         .select('*, user:profiles!registration_payments_user_id_fkey (id, display_name, email, referred_by)')
+        .eq('status', 'approved')
         .order('created_at', { ascending: false });
-      if (filter !== 'all') query = query.eq('status', filter);
-      const { data, error } = await query;
       if (error) throw error;
       return data as RegistrationPayment[];
     },
   });
-
-  useEffect(() => {
-    const id = searchParams.get('id');
-    if (id && payments && !payments.some((p) => p.id === id)) setFilter('all');
-  }, [searchParams, payments]);
 
   const selected = payments?.find((p) => p.id === selectedId) ?? null;
 
@@ -51,40 +32,12 @@ export function Payments() {
     setSearchParams(id ? { id } : {}, { replace: true });
   }
 
-  const review = useMutation({
-    mutationFn: async ({ id, action, note }: { id: string; action: 'approve' | 'reject'; note?: string }) => {
-      const fn = action === 'approve' ? 'approve_registration_payment' : 'reject_registration_payment';
-      const { error } = await supabase.rpc(fn, { p_payment_id: id, p_note: note ?? null });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['adminPayments'] });
-      queryClient.invalidateQueries({ queryKey: ['adminStats'] });
-      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
-      queryClient.invalidateQueries({ queryKey: ['vitals'] });
-      queryClient.invalidateQueries({ queryKey: ['attentionQueue'] });
-    },
-  });
-
   const list = (
     <>
-      <div className="sticky top-0 bg-bg border-b border-border px-3 py-2 flex flex-wrap gap-1.5">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
-              filter === f.value ? 'bg-surface text-text' : 'text-text-muted hover:text-text'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
       {isLoading ? (
         <ListState>Loading…</ListState>
       ) : !payments || payments.length === 0 ? (
-        <ListState>Nothing here.</ListState>
+        <ListState>No payments received yet.</ListState>
       ) : (
         payments.map((p) => (
           <ListRow
@@ -101,7 +54,7 @@ export function Payments() {
   );
 
   const detail = !selected ? (
-    <DetailEmpty label="Select a payment to verify." />
+    <DetailEmpty label="Select a payment to inspect." />
   ) : (
     <div className="p-4 sm:p-6 max-w-2xl">
       <div className="flex items-start justify-between gap-2">
@@ -118,40 +71,24 @@ export function Payments() {
         <Field label="Amount" mono>
           ₹{selected.amount_inr}
         </Field>
-        <Field label="UPI reference / UTR" mono>
-          {selected.upi_reference ?? '— none given —'}
+        <Field label="Razorpay payment ID" mono>
+          {selected.razorpay_payment_id ?? '—'}
         </Field>
-        <Field label="Submitted" mono>
+        <Field label="Razorpay order ID" mono>
+          {selected.razorpay_order_id ?? '—'}
+        </Field>
+        <Field label="Started" mono>
           {new Date(selected.created_at).toLocaleString()}
         </Field>
+        {selected.reviewed_at && (
+          <Field label="Confirmed" mono>
+            {new Date(selected.reviewed_at).toLocaleString()}
+          </Field>
+        )}
         <Field label="Referred">
-          {selected.user?.referred_by ? 'Yes — referrer earns the bonus on approval.' : 'No.'}
+          {selected.user?.referred_by ? 'Yes — referrer earned the bonus.' : 'No.'}
         </Field>
         {selected.admin_note && <Field label="Note">{selected.admin_note}</Field>}
-      </div>
-
-      {review.isError && <p className="text-coral text-sm mt-4">{(review.error as Error)?.message}</p>}
-
-      <div className="flex flex-wrap gap-2 mt-5">
-        <Btn onClick={() => openScreenshot(selected.screenshot_path)} disabled={!selected.screenshot_path}>
-          {selected.screenshot_path ? 'View screenshot ↗' : 'No screenshot'}
-        </Btn>
-        {selected.status !== 'approved' && (
-          <Btn variant="approve" onClick={() => review.mutate({ id: selected.id, action: 'approve' })}>
-            Approve
-          </Btn>
-        )}
-        {selected.status !== 'rejected' && (
-          <Btn
-            variant="reject"
-            onClick={() => {
-              const note = window.prompt('Reason (shown to the user):');
-              if (note !== null) review.mutate({ id: selected.id, action: 'reject', note });
-            }}
-          >
-            Reject
-          </Btn>
-        )}
       </div>
     </div>
   );
@@ -159,7 +96,7 @@ export function Payments() {
   return (
     <WorkPage
       title="Payments"
-      description="Verify ₹ registration transfers, then approve or reject."
+      description="Registration payments received through Razorpay. Each appears automatically once its payment is verified."
       list={list}
       detail={detail}
       selected={!!selected}

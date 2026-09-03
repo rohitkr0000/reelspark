@@ -32,36 +32,29 @@ export function youtubeEmbedHtml(videoId: string, origin: string = YT_EMBED_ORIG
   html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
   /* clip everything YouTube draws outside the framed video */
   #crop { position: absolute; inset: 0; overflow: hidden; }
-  /* Size #player as a 9:16 box scaled to *cover* the frame (never letterbox):
-     one axis is exactly 100% of the frame, the other overflows. Then ZOOM a
-     touch more so YouTube's corner overlays land outside #crop. */
+  /* Size #player as a 16:9 box scaled to *cover* the frame (never letterbox).
+     The YT player fills a 16:9 box edge-to-edge with no internal letterbox, so
+     a landscape clip covers the frame with a centre crop; a genuine 9:16 Short
+     gets pillarboxed inside this box, but the box is far wider than the frame so
+     those bars fall outside #crop and the reel still fills it. Then ZOOM a touch
+     more so YouTube's corner overlays land outside #crop. */
   #player {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: max(100vw, calc(100vh * 9 / 16));
-    height: max(100vh, calc(100vw * 16 / 9));
+    width: max(100vw, calc(100vh * 16 / 9));
+    height: max(100vh, calc(100vw * 9 / 16));
     transform: translate(-50%, -50%) scale(${ZOOM});
     transform-origin: center center;
   }
   #player iframe { position: absolute; inset: 0; width: 100% !important; height: 100% !important; border: 0; display: block; pointer-events: none; }
   #tap { position: absolute; inset: 0; z-index: 10; background: transparent; -webkit-tap-highlight-color: transparent; }
-  #hint { position: absolute; inset: 0; z-index: 11; display: none; align-items: center; justify-content: center; pointer-events: none; }
-  #hint.show { display: flex; }
-  #hint div {
-    width: 74px; height: 74px; border-radius: 37px;
-    background: rgba(9,9,11,0.45); border: 1.5px solid rgba(255,255,255,0.35);
-    display: flex; align-items: center; justify-content: center;
-  }
-  #hint svg { width: 26px; height: 26px; margin-left: 3px; }
 </style>
 </head>
 <body>
 <div id="crop"><div id="player"></div></div>
 <div id="tap"></div>
-<div id="hint"><div><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div></div>
 <script>
-  var hint = document.getElementById('hint');
   var tap = document.getElementById('tap');
   var player;
   var isPlaying = false;
@@ -96,8 +89,8 @@ export function youtubeEmbedHtml(videoId: string, origin: string = YT_EMBED_ORIG
       events: {
         onReady: function (e) { try { e.target.playVideo(); } catch (err) {} },
         onStateChange: function (e) {
-          if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; hint.classList.remove('show'); }
-          else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; hint.classList.add('show'); }
+          if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; }
+          else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; }
           else if (e.data === YT.PlayerState.ENDED) { isPlaying = false; post('ended'); }
         },
         onError: function (e) { post('error:' + e.data); }

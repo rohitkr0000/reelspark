@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,12 +10,14 @@ import {
   View,
   ViewToken,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { PlatformChip } from '../components/PlatformChip';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { colors, fonts, spacing } from '../theme/tokens';
+import { colors, fonts, radius, spacing } from '../theme/tokens';
+import { useResponsive } from '../theme/responsive';
 import { bestYtThumbnail, ytThumbnailFallback } from '../lib/ytThumb';
 import { useFeed, incrementViewCount } from '../hooks/useFeed';
 import type { Video } from '../types/database';
@@ -40,14 +42,27 @@ interface FeedItemProps {
   // must stop playing so we never have two videos with audio at once.
   isActive: boolean;
   itemHeight: number;
+  // Desktop shows a "scroll / arrow keys" hint instead of the swipe hint.
+  desktop: boolean;
 }
 
-function FeedItem({ video, isActive, itemHeight }: FeedItemProps) {
+function FeedItem({ video, isActive, itemHeight, desktop }: FeedItemProps) {
+  // Instagram's /embed/ is a cross-origin iframe: it can't autoplay and we can't
+  // script it or hide its centre play button. So we just mount the reel as soon
+  // as it's the active item and let the viewer tap IG's own button once to
+  // start it — no app poster, no app play button, no chrome layered on top.
+  const isInstagram = video.platform === 'instagram';
   const [playing, setPlaying] = useState(false);
-  const [ended, setEnded] = useState(false);
   const [views, setViews] = useState(video.view_count_in_app);
   const [gradientFrom, gradientTo] = gradientFor(video.id);
   const countedView = useRef(false);
+
+  const countView = useCallback(() => {
+    if (countedView.current) return;
+    countedView.current = true;
+    setViews((v) => v + 1);
+    incrementViewCount(video.id);
+  }, [video.id]);
 
   // Stop playback as soon as the item scrolls out of view.
   useEffect(() => {
@@ -56,28 +71,27 @@ function FeedItem({ video, isActive, itemHeight }: FeedItemProps) {
     }
   }, [isActive, playing]);
 
-  const startPlayback = useCallback(() => {
-    setEnded(false);
-    setPlaying(true);
-    if (!countedView.current) {
-      countedView.current = true;
-      setViews((v) => v + 1);
-      incrementViewCount(video.id);
-    }
-  }, [video.id]);
+  // For IG the reel is "playing" (mounted) whenever it's active — count the view
+  // when it scrolls in, since we can't observe the tap inside IG's iframe.
+  useEffect(() => {
+    if (isInstagram && isActive) countView();
+  }, [isInstagram, isActive, countView]);
 
   const togglePlay = useCallback(() => {
-    if (playing) {
-      setPlaying(false);
-    } else {
-      startPlayback();
-    }
-  }, [playing, startPlayback]);
+    setPlaying((p) => {
+      if (!p) countView();
+      return !p;
+    });
+  }, [countView]);
 
   const handleEnded = useCallback(() => {
     setPlaying(false);
-    setEnded(true);
   }, []);
+
+  // YouTube: our poster + tap-to-play. Instagram: the reel (IG's own iframe, with
+  // IG's own poster + button) is mounted whenever the item is active.
+  const showReel = isInstagram ? isActive : isActive && playing;
+  const showChrome = !showReel;
 
   const initials = (video.author_name ?? '??').slice(0, 2).toUpperCase();
 
@@ -92,10 +106,9 @@ function FeedItem({ video, isActive, itemHeight }: FeedItemProps) {
 
       {/* Poster art while stopped. Raw <img> (react-native-web's <Image> doesn't
           reliably honor resizeMode here, and this is a web-only build). It's
-          blurred + scaled as a soft backdrop behind the play button — a given
-          video's poster frame can be anything (e.g. a white screen-share), so we
-          don't show it sharp. */}
-      {!playing && video.thumbnail_url ? (
+          blurred + scaled as a soft backdrop — a given video's poster frame can
+          be anything (e.g. a white screen-share), so we don't show it sharp. */}
+      {showChrome && video.thumbnail_url ? (
         <img
           src={bestYtThumbnail(video.thumbnail_url) ?? video.thumbnail_url}
           alt=""
@@ -118,73 +131,76 @@ function FeedItem({ video, isActive, itemHeight }: FeedItemProps) {
         />
       ) : null}
 
-      {/* The actual player, mounted only while this item is active + playing. */}
+      {/* The actual player. YouTube mounts on play; Instagram mounts while active. */}
       <VideoPlayer
         platform={video.platform}
         videoId={video.platform_video_id}
-        playing={isActive && playing}
+        playing={showReel}
         onEnded={handleEnded}
         style={styles.playerFill}
       />
 
-      {!playing ? (
+      {/* Stopped-state only: full dim + top scrim + "For You" tag. */}
+      {showChrome ? (
         <>
           <View style={styles.posterScrim} pointerEvents="none" />
           <LinearGradient colors={['rgba(0,0,0,0.45)', 'transparent']} style={styles.topGradient} pointerEvents="none" />
-          <LinearGradient colors={['transparent', 'rgba(9,9,11,0.95)']} style={styles.bottomGradient} pointerEvents="none" />
           <Text style={styles.forYou}>For You</Text>
         </>
       ) : null}
 
-      {/* Big play affordance while stopped. While playing there is no app chrome —
-          tap the video to pause (handled inside the player), swipe up for next. */}
-      {!playing ? (
-        <View style={styles.playWrap} pointerEvents="box-none">
-          <Pressable onPress={togglePlay} style={styles.playBtn} accessibilityLabel="Play video">
-            <Ionicons
-              name={ended ? 'refresh' : 'play'}
-              size={26}
-              color="#fff"
-              style={ended ? undefined : { marginLeft: 3 }}
-            />
-          </Pressable>
-        </View>
+      {/* Bottom scrim stays up during playback so the creator/caption row below
+          it is legible over the video. */}
+      <LinearGradient
+        colors={['transparent', 'rgba(9,9,11,0.95)']}
+        style={styles.bottomGradient}
+        pointerEvents="none"
+      />
+
+      {/* No app play button. YouTube: tap anywhere on the stopped reel to start
+          it (the player's own tap layer then toggles play/pause). Instagram: the
+          reel is already mounted, so the single tap lands on IG's own control. */}
+      {showChrome && !isInstagram ? (
+        <Pressable style={StyleSheet.absoluteFill} onPress={togglePlay} accessibilityLabel="Play video" />
       ) : null}
 
-      {!playing ? (
-        <View style={styles.rail}>
-          <Pressable style={styles.railBtn} accessibilityLabel="Report video">
-            <Feather name="flag" size={18} color="#fff" />
-          </Pressable>
-          <Pressable style={styles.railBtn} accessibilityLabel="Share video">
-            <Feather name="share-2" size={18} color="#fff" />
-          </Pressable>
-          <View style={styles.railCount}>
-            <Text style={styles.railCountNumber}>{views}</Text>
-            <Text style={styles.railCountLabel}>views</Text>
-          </View>
+      {/* Action rail + creator/caption row stay visible while the reel plays
+          (`box-none` so only the buttons take taps — the rest passes through to
+          the video's own pause layer). */}
+      <View style={styles.rail} pointerEvents="box-none">
+        <Pressable style={styles.railBtn} accessibilityLabel="Report video">
+          <Feather name="flag" size={18} color="#fff" />
+        </Pressable>
+        <Pressable style={styles.railBtn} accessibilityLabel="Share video">
+          <Feather name="share-2" size={18} color="#fff" />
+        </Pressable>
+        <View style={styles.railCount}>
+          <Text style={styles.railCountNumber}>{views}</Text>
+          <Text style={styles.railCountLabel}>views</Text>
         </View>
-      ) : null}
+      </View>
 
-      {!playing ? (
-        <View style={styles.overlay} pointerEvents="box-none">
-          <View style={styles.creatorRow}>
-            <Avatar initials={initials} size={26} />
-            <Text style={styles.creatorName}>{video.author_name ?? 'Unknown creator'}</Text>
-            <PlatformChip platform={video.platform} />
-          </View>
-          <Text style={styles.caption} numberOfLines={2}>
-            {video.title ?? 'Untitled submission'}
-          </Text>
-          <Text style={styles.swipeHint}>↑ Swipe up for next</Text>
+      <View style={styles.overlay} pointerEvents="box-none">
+        <View style={styles.creatorRow}>
+          <Avatar initials={initials} size={26} />
+          <Text style={styles.creatorName}>{video.author_name ?? 'Unknown creator'}</Text>
+          <PlatformChip platform={video.platform} />
         </View>
-      ) : null}
+        <Text style={styles.caption} numberOfLines={2}>
+          {video.title ?? 'Untitled submission'}
+        </Text>
+        <Text style={styles.swipeHint}>
+          {desktop ? 'Scroll or press ↑ ↓ for next' : '↑ Swipe up for next'}
+        </Text>
+      </View>
     </View>
   );
 }
 
 export function FeedScreen() {
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFeed();
+  const { feedDesktop } = useResponsive();
+  const isFocused = useIsFocused();
 
   // Each feed item is exactly as tall as the visible feed area (the scene minus
   // the bottom tab bar, or the full height beside the left rail). Seeded from the
@@ -197,22 +213,94 @@ export function FeedScreen() {
     setAreaHeight((prev) => (Math.abs(prev - h) <= 1 ? prev : h));
   }, []);
 
+  // On desktop the feed is a centered 9:16 card, not full-bleed: leave vertical
+  // breathing room, cap the width, then lock the height to a true 9:16 so the
+  // reel is never cropped on wide monitors. Elsewhere the card is the whole area.
+  const maxCardHeight = feedDesktop ? Math.max(320, areaHeight - spacing.xl * 2) : areaHeight;
+  const cardWidth = feedDesktop ? Math.min(Math.round(maxCardHeight * 9 / 16), 460) : undefined;
+  const cardHeight = feedDesktop && cardWidth ? Math.round(cardWidth * 16 / 9) : areaHeight;
+
   const videos = data?.pages.flat() ?? [];
+  const videoCount = videos.length;
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(0);
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
 
-  // Keep the active id in a ref-stable callback (FlatList warns if this changes).
+  const listRef = useRef<FlatList<Video>>(null);
+
+  // Keep the active id/index in a ref-stable callback (FlatList warns if this changes).
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems.find((token) => token.isViewable);
     if (first?.item) setActiveId((first.item as Video).id);
+    if (first && first.index != null) setActiveIndex(first.index);
   });
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 });
 
+  // Desktop navigation: the playing <iframe> swallows wheel + key events, so we
+  // drive the list by index instead of relying on native paging.
+  const goBy = useCallback(
+    (delta: number) => {
+      const target = Math.max(0, Math.min(activeIndexRef.current + delta, videoCount - 1));
+      if (target === activeIndexRef.current) return;
+      listRef.current?.scrollToIndex({ index: target, animated: true });
+      if (target >= videoCount - 2 && hasNextPage && !isFetchingNextPage) fetchNextPage();
+    },
+    [videoCount, hasNextPage, isFetchingNextPage, fetchNextPage],
+  );
+
+  // Mouse wheel → one reel per gesture (attached natively so preventDefault works).
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = stageRef.current;
+    if (!feedDesktop || !node) return;
+    let accum = 0;
+    let locked = false;
+    let timer = 0;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (locked) return;
+      accum += e.deltaY;
+      if (Math.abs(accum) < 24) return;
+      const dir = accum > 0 ? 1 : -1;
+      accum = 0;
+      locked = true;
+      goBy(dir);
+      timer = window.setTimeout(() => {
+        locked = false;
+      }, 450);
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      node.removeEventListener('wheel', onWheel);
+      window.clearTimeout(timer);
+    };
+  }, [feedDesktop, goBy]);
+
+  // Keyboard navigation while the Feed screen is on top.
+  useEffect(() => {
+    if (!feedDesktop || !isFocused) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'j' || e.key === ' ') {
+        e.preventDefault();
+        goBy(1);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'k') {
+        e.preventDefault();
+        goBy(-1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [feedDesktop, isFocused, goBy]);
+
   const renderItem = useCallback(
     ({ item }: { item: Video }) => (
-      <FeedItem video={item} isActive={item.id === activeId} itemHeight={areaHeight} />
+      <FeedItem video={item} isActive={item.id === activeId} itemHeight={cardHeight} desktop={feedDesktop} />
     ),
-    [activeId, areaHeight],
+    [activeId, cardHeight, feedDesktop],
   );
 
   if (isLoading) {
@@ -240,35 +328,105 @@ export function FeedScreen() {
     );
   }
 
+  const list = (
+    <FlatList
+      ref={listRef}
+      // Remount cleanly when the feed area resizes so scroll offsets can't
+      // drift out of sync with the new item height.
+      key={`feed-${cardHeight}`}
+      style={styles.list}
+      data={videos}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      pagingEnabled
+      showsVerticalScrollIndicator={false}
+      decelerationRate="fast"
+      snapToInterval={cardHeight}
+      getItemLayout={(_, index) => ({ length: cardHeight, offset: cardHeight * index, index })}
+      onViewableItemsChanged={onViewableItemsChanged.current}
+      viewabilityConfig={viewabilityConfig.current}
+      onScrollToIndexFailed={({ index }) => {
+        setTimeout(() => listRef.current?.scrollToIndex({ index, animated: true }), 60);
+      }}
+      onEndReachedThreshold={1.5}
+      onEndReached={() => {
+        if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+      }}
+    />
+  );
+
+  if (!feedDesktop) {
+    return (
+      <View style={styles.screen} onLayout={onLayout}>
+        {list}
+      </View>
+    );
+  }
+
+  const atStart = activeIndex <= 0;
+  const atEnd = activeIndex >= videoCount - 1 && !hasNextPage;
+
   return (
-    <View style={styles.screen} onLayout={onLayout}>
-      <FlatList
-        // Remount cleanly when the feed area resizes so scroll offsets can't
-        // drift out of sync with the new item height.
-        key={`feed-${areaHeight}`}
-        style={styles.list}
-        data={videos}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        decelerationRate="fast"
-        snapToInterval={areaHeight}
-        getItemLayout={(_, index) => ({ length: areaHeight, offset: areaHeight * index, index })}
-        onViewableItemsChanged={onViewableItemsChanged.current}
-        viewabilityConfig={viewabilityConfig.current}
-        onEndReachedThreshold={1.5}
-        onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-        }}
-      />
+    <View style={[styles.screen, styles.screenDesktop]} onLayout={onLayout}>
+      <div ref={stageRef} style={stageStyle}>
+        <View style={[styles.card, { width: cardWidth, height: cardHeight }]}>{list}</View>
+        <View style={styles.chevronColumn}>
+          <Pressable
+            onPress={() => goBy(-1)}
+            disabled={atStart}
+            style={[styles.chevronBtn, atStart && styles.chevronBtnDisabled]}
+            accessibilityLabel="Previous reel"
+          >
+            <Feather name="chevron-up" size={22} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={() => goBy(1)}
+            disabled={atEnd}
+            style={[styles.chevronBtn, atEnd && styles.chevronBtnDisabled]}
+            accessibilityLabel="Next reel"
+          >
+            <Feather name="chevron-down" size={22} color="#fff" />
+          </Pressable>
+        </View>
+      </div>
     </View>
   );
 }
 
+const stageStyle: CSSProperties = {
+  display: 'flex',
+  flex: 1,
+  width: '100%',
+  height: '100%',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: spacing.xl,
+};
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background, overflow: 'hidden' },
+  screenDesktop: { alignItems: 'center', justifyContent: 'center' },
   list: { flex: 1 },
+  card: {
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chevronColumn: { gap: spacing.md },
+  chevronBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chevronBtnDisabled: { opacity: 0.3 },
   centered: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm },
   emptyTitle: { color: colors.text, fontFamily: fonts.displaySemibold, fontSize: 18 },
   emptyText: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, textAlign: 'center' },
@@ -286,17 +444,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-  },
-  playWrap: { position: 'absolute', top: '50%', left: '50%', marginTop: -37, marginLeft: -37 },
-  playBtn: {
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    backgroundColor: 'rgba(9,9,11,0.45)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   rail: { position: 'absolute', right: 14, bottom: 100, alignItems: 'center', gap: 18 },
   railBtn: {

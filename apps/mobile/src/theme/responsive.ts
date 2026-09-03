@@ -19,6 +19,8 @@ export interface Responsive {
   atLeastTablet: boolean;
   /** show the left nav rail instead of a bottom tab bar (>= 1000px) */
   sidebarNav: boolean;
+  /** feed renders as a centered 9:16 phone-frame column with wheel/key nav (>= 1000px) */
+  feedDesktop: boolean;
   /** columns for card grids (My Videos) */
   gridColumns: number;
 }
@@ -41,6 +43,7 @@ export function useResponsive(): Responsive {
     isWide,
     atLeastTablet: width >= BREAKPOINTS.tablet,
     sidebarNav: width >= BREAKPOINTS.sidebar,
+    feedDesktop: width >= BREAKPOINTS.sidebar,
     gridColumns: isWide ? 4 : isDesktop ? 3 : isTablet ? 2 : 1,
   };
 }

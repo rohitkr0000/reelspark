@@ -27,10 +27,14 @@ export function Btn({
 const BADGE: Record<string, string> = {
   approved: 'text-purple-300 border-purple/50 bg-purple/15',
   submitted: 'text-pink-300 border-magenta/50 bg-magenta/15',
+  created: 'text-text-muted border-border',
   pending: 'text-pink-300 border-magenta/50 bg-magenta/15',
   rejected: 'text-red-300 border-coral/50 bg-coral/15',
   flagged: 'text-orange-300 border-orange/50 bg-orange/15',
   open: 'text-orange-300 border-orange/50 bg-orange/15',
+  paid: 'text-purple-300 border-purple/50 bg-purple/15',
+  failed: 'text-red-300 border-coral/50 bg-coral/15',
+  reversed: 'text-orange-300 border-orange/50 bg-orange/15',
 };
 
 export function Badge({ value }: { value: string }) {

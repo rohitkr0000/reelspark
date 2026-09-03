@@ -90,6 +90,31 @@ const FEATHER_PATHS: Record<string, ReactNode> = {
     </>
   ),
   'chevron-right': <polyline points="9 18 15 12 9 6" />,
+  'chevron-down': <polyline points="6 9 12 15 18 9" />,
+  'arrow-left': (
+    <>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </>
+  ),
+  mail: (
+    <>
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+  lock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
   'check-circle': (
     <>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -137,6 +162,11 @@ const featherGlyphs = {
   flag: 0,
   'share-2': 0,
   'chevron-right': 0,
+  'chevron-down': 0,
+  'arrow-left': 0,
+  mail: 0,
+  bell: 0,
+  lock: 0,
   'check-circle': 0,
   'refresh-cw': 0,
 } as const;

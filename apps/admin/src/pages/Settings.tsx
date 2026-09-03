@@ -17,10 +17,10 @@ function RegistrationSettings() {
     },
   });
 
-  const [fee, setFee] = useState('250');
-  const [bonus, setBonus] = useState('5');
-  const [upiId, setUpiId] = useState('');
-  const [payee, setPayee] = useState('');
+  const [fee, setFee] = useState('300');
+  const [bonus, setBonus] = useState('50');
+  const [minWithdrawal, setMinWithdrawal] = useState('150');
+  const [razorpayKeyId, setRazorpayKeyId] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -28,8 +28,8 @@ function RegistrationSettings() {
     if (!data) return;
     setFee(String(data.registration_fee_inr));
     setBonus(String(data.referral_bonus_inr));
-    setUpiId(data.upi_id);
-    setPayee(data.upi_payee_name);
+    setMinWithdrawal(String(data.min_referral_withdrawal_inr ?? 150));
+    setRazorpayKeyId(data.razorpay_key_id ?? '');
   }, [data]);
 
   async function handleSave(e: FormEvent) {
@@ -41,8 +41,8 @@ function RegistrationSettings() {
       .update({
         registration_fee_inr: Math.max(0, parseInt(fee, 10) || 0),
         referral_bonus_inr: Math.max(0, parseInt(bonus, 10) || 0),
-        upi_id: upiId.trim(),
-        upi_payee_name: payee.trim(),
+        min_referral_withdrawal_inr: Math.max(0, parseInt(minWithdrawal, 10) || 0),
+        razorpay_key_id: razorpayKeyId.trim(),
       })
       .eq('id', true);
     setBusy(false);
@@ -60,8 +60,9 @@ function RegistrationSettings() {
     <section className={SECTION}>
       <h2 className="font-medium text-sm mb-1">Registration &amp; referral</h2>
       <p className="text-text-muted text-xs mb-4">
-        The one-time fee new users pay, the bonus a referrer earns when their invitee is approved, and the UPI
-        destination shown in the app.
+        The one-time fee new users pay, the bonus a referrer earns when their invitee is approved, and the
+        publishable Razorpay Key ID used by the checkout. The matching key secret lives only in the
+        <code className="mx-1">razorpay-*</code> edge function secrets.
       </p>
       <form onSubmit={handleSave} className="space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -73,14 +74,25 @@ function RegistrationSettings() {
             <label className="block text-xs text-text-muted mb-1">Referral bonus (₹)</label>
             <input type="number" min={0} value={bonus} onChange={(e) => setBonus(e.target.value)} className={field} />
           </div>
+          <div>
+            <label className="block text-xs text-text-muted mb-1">Min. referral withdrawal (₹)</label>
+            <input
+              type="number"
+              min={0}
+              value={minWithdrawal}
+              onChange={(e) => setMinWithdrawal(e.target.value)}
+              className={field}
+            />
+          </div>
         </div>
         <div>
-          <label className="block text-xs text-text-muted mb-1">UPI ID</label>
-          <input value={upiId} onChange={(e) => setUpiId(e.target.value)} className={field} />
-        </div>
-        <div>
-          <label className="block text-xs text-text-muted mb-1">UPI payee name</label>
-          <input value={payee} onChange={(e) => setPayee(e.target.value)} className={field} />
+          <label className="block text-xs text-text-muted mb-1">Razorpay Key ID</label>
+          <input
+            value={razorpayKeyId}
+            onChange={(e) => setRazorpayKeyId(e.target.value)}
+            placeholder="rzp_live_xxxxxxxxxxxxxx"
+            className={field}
+          />
         </div>
         {msg && <p className={`text-sm ${msg.ok ? 'text-purple-300' : 'text-coral'}`}>{msg.text}</p>}
         <button

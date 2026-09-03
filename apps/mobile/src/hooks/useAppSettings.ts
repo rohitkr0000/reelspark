@@ -4,10 +4,10 @@ import type { AppSettings } from '../types/database';
 
 const FALLBACK: AppSettings = {
   id: true,
-  registration_fee_inr: 250,
-  referral_bonus_inr: 5,
-  upi_id: 'matrigyan-1@okaxis',
-  upi_payee_name: 'matrigyan',
+  registration_fee_inr: 300,
+  referral_bonus_inr: 50,
+  min_referral_withdrawal_inr: 150,
+  razorpay_key_id: '',
   updated_at: '',
 };
 
