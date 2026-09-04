@@ -13,22 +13,38 @@
 //
 // A wrapping element clips it. We size + offset the iframe with plain layout
 // (NOT a CSS `transform: scale()` — mobile browsers mis-route touch taps on a
-// transformed cross-origin iframe, which stops the reel from starting): the
-// iframe is the clip's width so IG renders the reel edge-to-edge, pulled up by
-// HEADER_PX so IG's header clears the top, and made EXTRA_HEIGHT_PX taller than
-// the clip so IG's footer sits below the visible area. There's no left/right
-// crop this way. A pixel-perfect result is only possible by playing the raw .mp4.
+// transformed cross-origin iframe, which stops the reel from starting):
+//
+//  - The iframe is rendered INSTAGRAM_SCALE times wider than the clip. IG lays
+//    its whole page out to that width, so the reel's media area grows with it —
+//    at scale 1.0 the media is far shorter than our 9:16 frame and IG's footer
+//    shows underneath it; enlarging the media until it fills the frame's height
+//    pushes IG's header off the top and its footer off the bottom. The extra
+//    width spills past the clip evenly on both sides (`left` offset) and is
+//    cropped — a reel is centre-weighted, so this only trims the edges.
+//  - The iframe is pulled up by the (now scaled) header height so IG's header
+//    clears the top, and made taller than it needs to be so IG lays the footer
+//    out normally before the clip hides it.
+//
+// A pixel-perfect, crop-free result is only possible by playing the raw .mp4.
 //
 // Caveats that are Instagram's, not ours: the reel needs one tap to start (IG
 // embeds don't autoplay) and there's no "ended" event, so IG items don't
 // auto-advance the way YouTube ones do.
 
-// How far (CSS px) to pull the iframe up so IG's header clears the top edge.
-// Raise if a strip of the header shows; lower if the reel's top is cut.
+// How much wider than the clip to render IG's page. 1.0 = no enlargement (IG's
+// footer then sits visible below the reel); ~1.9 makes the reel fill a 9:16
+// frame's height so IG's header/footer fall outside it. Lower it if faces get
+// cropped at the sides; raise it if a strip of IG's footer still shows.
+export const INSTAGRAM_SCALE = 1.9;
+
+// Header height (CSS px) BEFORE scaling — multiplied by INSTAGRAM_SCALE at use.
+// Raise if a strip of IG's header shows; lower if the reel's top is cut.
 export const INSTAGRAM_HEADER_PX = 52;
-// Extra iframe height beyond the clip (CSS px) so IG's footer + "more on
-// Instagram" bar land below the visible area. Raise if the footer peeks in.
-export const INSTAGRAM_EXTRA_HEIGHT_PX = 260;
+
+// Slack (CSS px) added to the iframe height so IG lays its footer out normally
+// before the clip hides it. Only needs to comfortably exceed IG's footer height.
+export const INSTAGRAM_EXTRA_HEIGHT_PX = 400;
 
 export function instagramReelEmbedSrc(reelId: string): string {
   const safeId = String(reelId).replace(/[^a-zA-Z0-9_-]/g, '');

@@ -4,6 +4,7 @@ import { youtubeEmbedHtml } from './youtubeEmbedHtml';
 import {
   INSTAGRAM_EXTRA_HEIGHT_PX,
   INSTAGRAM_HEADER_PX,
+  INSTAGRAM_SCALE,
   instagramReelEmbedSrc,
 } from './instagramEmbedHtml';
 
@@ -49,9 +50,11 @@ export function VideoPlayer({ platform, videoId, playing, onEnded, style }: Vide
 
   // Instagram: its /embed/ page has no chromeless/API mode, so we clip it and
   // offset the iframe with plain layout (no CSS transform — that breaks touch
-  // taps on mobile) so IG's header/footer sit outside the clip. IG can't
-  // autoplay and its centre play button is inside its own cross-origin
-  // document — one tap on it starts the reel.
+  // taps on mobile). The iframe is rendered INSTAGRAM_SCALE times wider than the
+  // clip so IG's media area grows to fill the frame's height, pushing IG's
+  // header off the top and its footer off the bottom; the extra width spills
+  // evenly past both sides and is cropped. IG can't autoplay and its centre play
+  // button is inside its own cross-origin document — one tap on it starts the reel.
   return (
     <View style={[styles.fill, style]}>
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#000' }}>
@@ -61,10 +64,10 @@ export function VideoPlayer({ platform, videoId, playing, onEnded, style }: Vide
           scrolling="no"
           style={{
             position: 'absolute',
-            left: 0,
-            top: `-${INSTAGRAM_HEADER_PX}px`,
-            width: '100%',
-            height: `calc(100% + ${INSTAGRAM_HEADER_PX + INSTAGRAM_EXTRA_HEIGHT_PX}px)`,
+            left: `${(1 - INSTAGRAM_SCALE) * 50}%`,
+            top: `-${INSTAGRAM_HEADER_PX * INSTAGRAM_SCALE}px`,
+            width: `${INSTAGRAM_SCALE * 100}%`,
+            height: `calc(${INSTAGRAM_SCALE * 100}% + ${INSTAGRAM_EXTRA_HEIGHT_PX}px)`,
             border: '0',
             display: 'block',
             background: '#000',
