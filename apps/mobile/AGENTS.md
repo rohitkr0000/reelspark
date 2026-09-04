@@ -34,10 +34,11 @@ desktop `≥1024`, wide `≥1440`.
   `wheel` listener (one reel per gesture, `preventDefault`s native scroll),
   `keydown` on `window` while the screen `useIsFocused()` (↑/↓, PageUp/PageDown,
   Space, j/k), and the chevron buttons — all via `goBy(±1)`. The YouTube embed
-  (`youtubeEmbedHtml.ts`) sizes its player as a **16:9** box scaled to *cover*
-  the frame (`max(100vw, calc(100vh*16/9))` CSS) so landscape clips fill it with
-  a centre-crop and true Shorts still fill it (their pillarbox bars fall outside
-  `#crop`) — it never letterboxes. There is **no app play button**: for YouTube,
+  (`youtubeEmbedHtml.ts`) sizes its player to the **9:16 frame itself** and lets
+  YouTube's embed player cover-fit the clip: a true Short fills the frame with no
+  crop, a landscape clip centre-crops to fill it. (Sizing the player as a 16:9
+  box wider than the frame — the previous approach — made YouTube cover-fit a
+  vertical Short to that over-wide box and zoom ~3x, cropping the Short away.) There is **no app play button**: for YouTube,
   a full-bleed `Pressable` over the paused poster starts the reel (tap again while
   playing pauses it, via the embed's `#tap` layer); the paused poster is a raw
   `<img>` (RNW `<Image>` ignores `resizeMode` here) using YouTube's 9:16
@@ -49,16 +50,27 @@ desktop `≥1024`, wide `≥1440`.
   `<iframe src>` inside a clipping `<div>` (nesting it in a srcDoc frame gave the
   inner frame an opaque origin and stopped IG playing on tap; a CSS
   `transform: scale()` broke touch taps on mobile the same way). It hides IG's
-  chrome with **plain layout**: iframe at the clip's width (so IG renders the reel
-  edge-to-edge, no left/right crop), pulled up `INSTAGRAM_HEADER_PX` and made
-  `INSTAGRAM_EXTRA_HEIGHT_PX` taller than the clip so IG's header/footer sit
-  outside it (constants in `instagramEmbedHtml.ts`).
+  chrome with **plain layout**: the iframe is rendered `INSTAGRAM_SCALE`× wider
+  than the clip (IG lays its page out to that width so the reel's media grows
+  with it), pulled up `INSTAGRAM_HEADER_PX` and made `INSTAGRAM_EXTRA_HEIGHT_PX`
+  taller than the clip so IG's header/footer sit outside it; the extra width
+  spills evenly past both sides and is cropped. `INSTAGRAM_SCALE` is a
+  compromise (1.5) — enough that the reel's framing stays close to Instagram's
+  rather than the ~1.9 it takes to physically push IG's footer off the clip;
+  `VideoPlayer` then lays the same top + bottom fading scrims the YouTube embed
+  uses over the clip (`INSTAGRAM_MASK_TOP_*` / `INSTAGRAM_MASK_BOTTOM_*` in
+  `instagramEmbedHtml.ts`): the top strip is header padding, the bottom strip is
+  footer padding and stays opaque long enough to hide IG's like/caption/"more on
+  Instagram" text.
   IG can't autoplay and its centre play button lives on instagram.com's origin,
   so it can't be scripted or hidden — instead `FeedItem` mounts the IG iframe as
   soon as the item is active (no app poster / play button on top), so a single
   tap lands on IG's own control and its button clears itself once the reel plays.
   The view is counted when an IG item scrolls in (the tap can't be observed
-  inside the iframe); IG items have no "ended" event so they don't auto-advance.
+  inside the iframe); IG items have no "ended" event so they don't auto-advance,
+  and IG's centre **"Watch again on Instagram"** replay card after a reel ends is
+  likewise inside IG's cross-origin iframe and can't be removed from our side —
+  only playing the raw `.mp4` avoids it.
 - **My Videos:** `FlatList` `numColumns` = `useResponsive().gridColumns` (1 → 4).
 - **Form / content screens** (auth, Submit, Edit/Profile): the root `screen` style
   gets `maxWidth` + `alignSelf: 'center'` so content stays a readable column.

@@ -4,6 +4,10 @@ import { youtubeEmbedHtml } from './youtubeEmbedHtml';
 import {
   INSTAGRAM_EXTRA_HEIGHT_PX,
   INSTAGRAM_HEADER_PX,
+  INSTAGRAM_MASK_BOTTOM_HEIGHT_PX,
+  INSTAGRAM_MASK_BOTTOM_OPAQUE_PX,
+  INSTAGRAM_MASK_TOP_HEIGHT_PX,
+  INSTAGRAM_MASK_TOP_OPAQUE_PX,
   INSTAGRAM_SCALE,
   instagramReelEmbedSrc,
 } from './instagramEmbedHtml';
@@ -74,6 +78,31 @@ export function VideoPlayer({ platform, videoId, playing, onEnded, style }: Vide
           }}
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
           allowFullScreen
+        />
+        {/* Top + bottom scrim "padding", same as the YouTube embed's #mask-top /
+            #mask-bottom: opaque for OPAQUE px, then fading out. Top gives the
+            reel some breathing room; bottom also covers IG's footer text. */}
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            height: `${INSTAGRAM_MASK_TOP_HEIGHT_PX}px`,
+            background: `linear-gradient(to bottom, #000 0, #000 ${INSTAGRAM_MASK_TOP_OPAQUE_PX}px, rgba(0,0,0,0) 100%)`,
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: `${INSTAGRAM_MASK_BOTTOM_HEIGHT_PX}px`,
+            background: `linear-gradient(to top, #000 0, #000 ${INSTAGRAM_MASK_BOTTOM_OPAQUE_PX}px, rgba(0,0,0,0) 100%)`,
+            pointerEvents: 'none',
+          }}
         />
       </div>
     </View>
